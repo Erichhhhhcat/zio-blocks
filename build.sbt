@@ -73,7 +73,6 @@ lazy val root = project
     `schema-toon`.js,
     openapi.jvm,
     openapi.js,
-    openapi.native,
     streams.jvm,
     streams.js,
     chunk.jvm,
@@ -437,7 +436,7 @@ lazy val `schema-toon` = crossProject(JSPlatform, JVMPlatform)
     })
   )
 
-lazy val openapi = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+lazy val openapi = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
   .settings(stdSettings("zio-blocks-openapi"))
   .settings(crossProjectSettings)
@@ -445,7 +444,6 @@ lazy val openapi = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .enablePlugins(BuildInfoPlugin)
   .jvmSettings(mimaSettings(failOnProblem = false))
   .jsSettings(jsSettings)
-  .nativeSettings(nativeSettings)
   .dependsOn(schema % "compile->compile;test->test")
   .settings(
     libraryDependencies ++= Seq(
@@ -456,7 +454,7 @@ lazy val openapi = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     coverageMinimumBranchTotal := 0
   )
 
-lazy val scalaNextTests = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+lazy val scalaNextTests = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
   .settings(stdSettings("zio-blocks-scala-next-tests", Seq("3.7.4")))
   .dependsOn(schema % "compile->compile;test->test")
