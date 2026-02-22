@@ -6,13 +6,13 @@ import scala.reflect.macros.whitebox
 /**
  * Tuple operations: combining values into flat tuples and separating them.
  *
- * The `Tuples` module provides two complementary typeclasses:
- *   - `Combiner[L, R]`: Combines two values into a flattened output
- *   - `Separator[A]`: Separates a combined value back into its parts
+ * The `Tuples` module provides a unified typeclass `Tuples[L, R]` that both
+ * combines two values into a flattened output and separates them back.
  *
  * Key behaviors:
  *   - Unit identity: `combine((), a)` returns `a`
  *   - Tuple flattening: `combine((a, b), c)` returns `(a, b, c)`
+ *   - `separate` is the inverse of `combine`
  *
  * Scala 2 limitation: Maximum tuple arity is 22.
  *
@@ -20,86 +20,58 @@ import scala.reflect.macros.whitebox
  *   {{{
  * import zio.blocks.combinators.Tuples._
  *
- * val combined: (Int, String, Boolean) = Combiner.combine((1, "a"), true)
- * val (left, right) = Separator.separate(combined)
+ * val combined: (Int, String, Boolean) = Tuples.combine((1, "a"), true)
+ * val (left, right) = Tuples.separate(combined)
  *   }}}
  */
 object Tuples {
 
-  /**
-   * Combines two values into a single output value with tuple flattening.
-   *
-   * @tparam L
-   *   The left input type
-   * @tparam R
-   *   The right input type
-   */
-  trait Combiner[L, R] {
+  trait Tuples[L, R] {
     type Out
 
-    /**
-     * Combines two values into a single output value.
-     *
-     * @param l
-     *   The left value
-     * @param r
-     *   The right value
-     * @return
-     *   The combined output
-     */
     def combine(l: L, r: R): Out
+
+    def separate(out: Out): (L, R)
   }
 
-  /**
-   * Separates a combined value back into its constituent parts.
-   *
-   * @tparam A
-   *   The combined input type
-   */
+  object Tuples extends TuplesLowPriority1 {
+    type WithOut[L, R, O] = Tuples[L, R] { type Out = O }
+
+    implicit def leftUnit[A]: WithOut[Unit, A, A] =
+      new Tuples[Unit, A] {
+        type Out = A
+        def combine(l: Unit, r: A): A   = r
+        def separate(out: A): (Unit, A) = ((), out)
+      }
+
+    implicit def rightUnit[A]: WithOut[A, Unit, A] =
+      new Tuples[A, Unit] {
+        type Out = A
+        def combine(l: A, r: Unit): A   = l
+        def separate(out: A): (A, Unit) = (out, ())
+      }
+  }
+
+  trait TuplesLowPriority1 {
+    implicit def combineTuple[L, R]: Tuples[L, R] = macro TuplesMacros.tuplesImpl[L, R]
+  }
+
+  // Backward-compatible aliases
+  type Combiner[L, R] = Tuples[L, R]
+
+  object Combiner {
+    type WithOut[L, R, O] = Tuples.WithOut[L, R, O]
+  }
+
+  // Backward-compatible Separator trait
   trait Separator[A] {
     type Left
     type Right
 
-    /**
-     * Separates a combined value back into its constituent parts.
-     *
-     * @param a
-     *   The combined value
-     * @return
-     *   A tuple of the original left and right values
-     */
     def separate(a: A): (Left, Right)
   }
 
-  object Combiner extends CombinerLowPriority1 {
-
-    /**
-     * Type alias for a Combiner with a specific output type.
-     */
-    type WithOut[L, R, O] = Combiner[L, R] { type Out = O }
-
-    implicit def leftUnit[A]: WithOut[Unit, A, A] =
-      new Combiner[Unit, A] {
-        type Out = A
-        def combine(l: Unit, r: A): A = r
-      }
-
-    implicit def rightUnit[A]: WithOut[A, Unit, A] =
-      new Combiner[A, Unit] {
-        type Out = A
-        def combine(l: A, r: Unit): A = l
-      }
-  }
-
-  trait CombinerLowPriority1 {
-    implicit def combineTuple[L, R]: Combiner[L, R] = macro TuplesMacros.combinerImpl[L, R]
-  }
-
   object Separator extends SeparatorLowPriority1 {
-
-    /**
-     * Type alias for a Separator with specific left and right types.
-     */
     type WithTypes[A, L, R] = Separator[A] { type Left = L; type Right = R }
 
     implicit def separateTuple[A]: Separator[A] = macro TuplesMacros.separatorImpl[A]
@@ -130,8 +102,7 @@ object Tuples {
       }
   }
 
-  def combine[L, R](l: L, r: R)(implicit c: Combiner[L, R]): c.Out = c.combine(l, r)
-
+  def combine[L, R](l: L, r: R)(implicit c: Tuples[L, R]): c.Out     = c.combine(l, r)
   def separate[A](a: A)(implicit s: Separator[A]): (s.Left, s.Right) = s.separate(a)
 
   private[combinators] object TuplesMacros {
@@ -149,7 +120,7 @@ object Tuples {
     private def tupleElements(c: whitebox.Context)(tpe: c.universe.Type): List[c.universe.Type] =
       tpe.dealias.typeArgs
 
-    def combinerImpl[L: c.WeakTypeTag, R: c.WeakTypeTag](c: whitebox.Context): c.Tree = {
+    def tuplesImpl[L: c.WeakTypeTag, R: c.WeakTypeTag](c: whitebox.Context): c.Tree = {
       import c.universe._
 
       val lType = weakTypeOf[L].dealias
@@ -159,9 +130,10 @@ object Tuples {
 
       if (lType =:= unitType) {
         q"""
-          new _root_.zio.blocks.combinators.Tuples.Combiner[$lType, $rType] {
+          new _root_.zio.blocks.combinators.Tuples.Tuples[$lType, $rType] {
             type Out = $rType
             def combine(l: $lType, r: $rType): $rType = r
+            def separate(out: $rType): ($lType, $rType) = ((), out)
           }
         """
       } else if (isTuple(c)(lType)) {
@@ -178,18 +150,23 @@ object Tuples {
         val lAccessors = (1 to arity).map(i => q"l.${TermName(s"_$i")}")
         val allArgs    = lAccessors :+ q"r"
 
+        val sepLAccessors = (1 to arity).map(i => q"out.${TermName(s"_$i")}")
+        val sepR          = q"out.${TermName(s"_$newArity")}"
+
         q"""
-          new _root_.zio.blocks.combinators.Tuples.Combiner[$lType, $rType] {
+          new _root_.zio.blocks.combinators.Tuples.Tuples[$lType, $rType] {
             type Out = $outType
             def combine(l: $lType, r: $rType): $outType = (..$allArgs)
+            def separate(out: $outType): ($lType, $rType) = ((..$sepLAccessors), $sepR)
           }
         """
       } else {
         val outType = appliedType(typeOf[(_, _)].typeConstructor, List(lType, rType))
         q"""
-          new _root_.zio.blocks.combinators.Tuples.Combiner[$lType, $rType] {
+          new _root_.zio.blocks.combinators.Tuples.Tuples[$lType, $rType] {
             type Out = $outType
             def combine(l: $lType, r: $rType): $outType = (l, r)
+            def separate(out: $outType): ($lType, $rType) = out
           }
         """
       }
