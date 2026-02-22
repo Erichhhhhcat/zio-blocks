@@ -189,6 +189,15 @@ object TypeInferenceSpec extends ZIOSpecDefault {
           """,
           "Either["
         )
+      },
+      test("separate canonicalizes nested Either before extracting") {
+        assertInferredTypeContains(
+          """
+            import zio.blocks.combinators.Eithers
+            val result: String = Eithers.separate(Right(Right(true)): Either[Int, Either[String, Boolean]])
+          """,
+          "Either["
+        )
       }
     ),
     suite("Generic functions with type inference")(
