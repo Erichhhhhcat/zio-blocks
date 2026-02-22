@@ -12,8 +12,8 @@ import scala.reflect.TypeTest
  * Key behaviors:
  *   - Canonical form is flat union: `A | B | C | D`
  *   - `combine` takes `Either[L, R]` as input and produces union `L | R`
- *   - `separate` uses TypeTest to discriminate the rightmost type, bridging
- *     the untagged world to the tagged world
+ *   - `separate` uses TypeTest to discriminate the rightmost type, bridging the
+ *     untagged world to the tagged world
  *
  * Caveat: Union discrimination is fragile for erased types (e.g.,
  * `List[Int] | List[String]`). Works reliably for distinct concrete types.
@@ -34,8 +34,8 @@ import scala.reflect.TypeTest
 object Unions {
 
   /**
-   * Unified trait that combines an Either[L, R] into a union type L | R
-   * and separates it back.
+   * Unified trait that combines an Either[L, R] into a union type L | R and
+   * separates it back.
    *
    * @tparam L
    *   The left input type
@@ -58,8 +58,8 @@ object Unions {
     /**
      * Separates a union value back into Either[L, R].
      *
-     * This is the inverse of `combine`:
-     * `separate(combine(e)) == e` for all `e: Either[L, R]`
+     * This is the inverse of `combine`: `separate(combine(e)) == e` for all
+     * `e: Either[L, R]`
      *
      * @param out
      *   The union value
@@ -187,5 +187,5 @@ object Unions {
   }
 
   def combine[L, R](either: Either[L, R])(using u: Unions[L, R]): u.Out = u.combine(either)
-  def separate[A](a: A)(using s: Separator[A]): Either[s.Left, s.Right]   = s.separate(a)
+  def separate[A](a: A)(using s: Separator[A]): Either[s.Left, s.Right] = s.separate(a)
 }

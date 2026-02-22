@@ -18,11 +18,13 @@ object Tuples {
   type Combined[A, B] = Flatten[A *: B *: EmptyTuple]
 
   type Init[T <: Tuple] <: Tuple = T match {
+    case EmptyTuple      => EmptyTuple
     case x *: EmptyTuple => EmptyTuple
     case x *: xs         => x *: Init[xs]
   }
 
   type Last[T <: Tuple] = T match {
+    case EmptyTuple      => Nothing
     case x *: EmptyTuple => x
     case x *: xs         => Last[xs]
   }

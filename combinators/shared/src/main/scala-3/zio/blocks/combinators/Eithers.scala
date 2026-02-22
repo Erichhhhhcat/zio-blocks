@@ -99,8 +99,8 @@ object Eithers {
     /**
      * Separates a canonical form back into the original Either[L, R].
      *
-     * This is the inverse of `combine`:
-     * `separate(combine(e)) == e` for all `e: Either[L, R]`
+     * This is the inverse of `combine`: `separate(combine(e)) == e` for all
+     * `e: Either[L, R]`
      *
      * @param out
      *   The canonical form
@@ -248,5 +248,5 @@ object Eithers {
   }
 
   def combine[L, R](either: Either[L, R])(using e: Eithers[L, R]): e.Out = e.combine(either)
-  def separate[A](a: A)(using s: Separator[A]): Either[s.Left, s.Right]   = s.separate(a)
+  def separate[A](a: A)(using s: Separator[A]): Either[s.Left, s.Right]  = s.separate(a)
 }
